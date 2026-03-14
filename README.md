@@ -51,8 +51,16 @@ Place your configuration file as `./telemt.toml`.
 
 ### 3. Create `docker-compose.yml`
 
-> Note: the container runs as **non-root**, but Telemt binds to **443** by default.  
-> To allow binding to privileged ports, we add `NET_BIND_SERVICE`.
+> **⚠️ Network mode note:**
+> This configuration uses `network_mode: host`, which means the container shares
+> the host's network stack directly. **Published ports (`ports:` section) are
+> discarded when using host network mode** — port exposure is controlled entirely
+> by your `telemt.toml` configuration (i.e. whichever port Telemt listens on will
+> be available on the host automatically).
+>
+> If you need Docker-managed port mapping (e.g. remapping ports, or binding only
+> to `127.0.0.1`), remove `network_mode: host` to use the default **bridge** mode
+> and uncomment the `ports` section below.
 
 ```yaml
 services:
@@ -69,10 +77,20 @@ services:
     volumes:
       - ./telemt.toml:/etc/telemt.toml:ro
 
-    ports:
-      - "443:443/tcp"
-      # If you enable metrics_port=9090 in config:
-      # - "127.0.0.1:9090:9090/tcp"
+    # ---------------------------------------------------------------
+    # Host network mode: the container uses the host's network stack
+    # directly. The "ports" section is IGNORED in this mode — Telemt
+    # binds to host ports as specified in telemt.toml.
+    #
+    # To use Docker-managed port mapping instead, comment out
+    # "network_mode: host" and uncomment the "ports" section below.
+    # ---------------------------------------------------------------
+    network_mode: host
+
+    # ports:
+    #   - "443:443/tcp"
+    #   # If you enable metrics_port=9090 in config:
+    #   # - "127.0.0.1:9090:9090/tcp"
 
     # Hardening
     security_opt:
@@ -84,9 +102,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
-
-    # Mount to host machine
-    network_mode: host
 
     # Resource limits (optional)
     deploy:
@@ -145,6 +160,10 @@ docker compose logs -f
 |---:|---|
 | `443/tcp` | Main MTProxy listener (commonly used for TLS-like traffic). |
 | `9090/tcp` | Metrics port (only if enabled in `telemt.toml`). |
+
+> **Note:** When using `network_mode: host`, Docker does not manage port mapping.
+> Telemt binds directly to host interfaces/ports as configured in `telemt.toml`.
+> The table above lists the default ports for reference only.
 
 ---
 
