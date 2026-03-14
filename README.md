@@ -1,6 +1,6 @@
 # 🐳 telemt-docker
 
-[![Docker Image Size](https://img.shields.io/docker/image-size/whn0thacked/telemt-docker?style=flat-square&logo=docker&color=blue)](https://hub.docker.com/r/whn0thacked/telemt-docker)
+![Docker Image Size](https://img.shields.io/docker/image-size/whn0thacked/telemt-docker/latest?style=flat-square&logo=docker&color=blue)
 [![Docker Pulls](https://img.shields.io/docker/pulls/whn0thacked/telemt-docker?style=flat-square&logo=docker)](https://hub.docker.com/r/whn0thacked/telemt-docker)
 [![Architecture](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-important?style=flat-square)](#)
 [![Security: non-root](https://img.shields.io/badge/security-non--root-success?style=flat-square)](#)
