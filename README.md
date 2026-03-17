@@ -28,7 +28,7 @@ Built as a **fully static** binary and shipped in a **distroless** runtime image
 - **🔐 Secure by default:** Distroless runtime + non-root user.
 - **🏗 Multi-arch:** Supports `amd64` and `arm64`.
 - **📦 Fully static binary:** Designed for `gcr.io/distroless/static:nonroot`.
-- **🧾 Config-driven:** You mount a single `/etc/telemt.toml` and go.
+- **🧾 Config-driven:** You mount a single configuration file directory and go.
 - **📈 Metrics-ready:** Supports Telemt metrics port (`9090`) via config.
 - **🧰 Build-time pinning:** Upstream repo/ref are configurable via build args.
 
@@ -51,13 +51,24 @@ Telemt users require a **32-hex-char secret** (16 bytes):
 openssl rand -hex 16
 ```
 
-### 2. Create `telemt.toml`
+### 2. Create Configuration Directory
 
 Refer to the upstream repository for the configuration format and examples:
 
 👉 **https://github.com/telemt/telemt**
 
-Place your configuration file as `./telemt.toml`.
+To allow the Telemt API to write configuration changes dynamically (e.g. creating users), you **must mount a directory**, not just the file. The API performs atomic saves by creating a temporary `.tmp` file in the same directory and renaming it. 
+
+Create the directory, place your config inside, and ensure it is writable by the container:
+
+```bash
+mkdir ./telemt-config
+# Create and edit your config inside
+touch ./telemt-config/telemt.toml
+# Grant write permissions so the container's non-root user can modify the config
+chmod 777 ./telemt-config
+chmod 666 ./telemt-config/telemt.toml
+```
 
 ### 3. Create `docker-compose.yml`
 
@@ -73,7 +84,7 @@ Place your configuration file as `./telemt.toml`.
 > and uncomment the `ports` section below.
 
 > **⚠️ Privileged Ports (443) Binding Note:**
-> The base image uses a non-root user by default. If your configuration binds Telemt to port `443` (or any port < 1024), you will encounter a `Permission denied (os error 13)` error. To fix this, the container must be run as `root` and the `no-new-privileges` security option must be disabled. This is already reflected in the `docker-compose.yml` example below.
+> The base image uses a non-root user by default to minimize the attack vector. If your configuration binds Telemt to port `443` (or any port < 1024), you will encounter a `Permission denied (os error 13)` error. To fix this, you need to run the container as `root` by uncommenting `user: "root"` and commenting out the `security_opt: no-new-privileges:true` block in the example below.
 
 ```yaml
 services:
@@ -84,18 +95,26 @@ services:
 
     # ---------------------------------------------------------------
     # Root user requirement for binding privileged ports (<1024)
-    # The default image runs as 'nonroot'. We override it to 'root'
-    # to successfully bind to port 443 without os error 13.
+    # The default image runs as 'nonroot' to minimize attack vectors.
+    # Uncomment the line below to run as root ONLY if you need to bind
+    # to port 443 and encounter 'os error 13'.
     # ---------------------------------------------------------------
-    user: "root"
+    # user: "root"
 
     # Telemt uses RUST_LOG for verbosity (optional)
     environment:
       RUST_LOG: "info"
 
-    # Telemt reads config from CMD (default: /etc/telemt.toml)
+    # ---------------------------------------------------------------
+    # API Configuration writes (Atomic Config Save)
+    # The API performs atomic writes (creates a .tmp file and renames it).
+    # To allow the API to save changes to the config, we MUST mount the 
+    # ENTIRE directory (not just the file) and ensure it is writable.
+    # We override the default command to point to the mounted file.
+    # ---------------------------------------------------------------
+    command: ["/etc/telemt/telemt.toml"]
     volumes:
-      - ./telemt.toml:/etc/telemt.toml:ro
+      - ./telemt-config:/etc/telemt
 
     # ---------------------------------------------------------------
     # Host network mode: the container uses the host's network stack
@@ -114,11 +133,12 @@ services:
 
     # Hardening
     # ---------------------------------------------------------------
-    # ⚠️ 'no-new-privileges:true' is commented out because it prevents
-    # binding to port 443 even when running as root. 
+    # ⚠️ If you uncommented `user: "root"` above to bind to port 443,
+    # you MUST comment out the two lines below, as they prevent
+    # gaining the necessary privileges for binding restricted ports.
     # ---------------------------------------------------------------
-    # security_opt:
-    #   - no-new-privileges:true
+    security_opt:
+      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
@@ -176,7 +196,7 @@ docker compose logs -f
 
 | Container Path | Purpose |
 |---|---|
-| **`/etc/telemt.toml`** | Main Telemt configuration file (you mount it from the host). |
+| **`/etc/telemt`** | Directory containing the `telemt.toml` config file. Mounted as a directory (without `:ro`) to allow the API to securely perform atomic writes. |
 
 ### Ports
 
@@ -184,6 +204,7 @@ docker compose logs -f
 |---:|---|
 | `443/tcp` | Main MTProxy listener (commonly used for TLS-like traffic). |
 | `9090/tcp` | Metrics port (only if enabled in `telemt.toml`). |
+| `9091/tcp` | API port (only if enabled in `telemt.toml`). |
 
 > **Note:** When using `network_mode: host`, Docker does not manage port mapping.
 > Telemt binds directly to host interfaces/ports as configured in `telemt.toml`.
@@ -194,18 +215,26 @@ docker compose logs -f
 ## 🧠 Container Behavior
 
 - **ENTRYPOINT:** `telemt`
-- **CMD (default):** `/etc/telemt.toml`
+- **CMD:** Extracted from the `docker-compose.yml` (`["/etc/telemt/telemt.toml"]`)
 
 So the container effectively runs:
 
 ```text
-telemt /etc/telemt.toml
+telemt /etc/telemt/telemt.toml
 ```
 
-To use a different config path, override the command:
+To run a raw docker command without Compose:
 
 ```bash
-docker run ... whn0thacked/telemt-docker:latest /path/to/config.toml
+docker build -t telemt:local .
+docker run --name telemt --restart unless-stopped \
+  -p 443:443 \
+  -e RUST_LOG=info \
+  -v "$PWD/telemt-config:/etc/telemt" \
+  --read-only \
+  --cap-drop ALL --cap-add NET_BIND_SERVICE \
+  --ulimit nofile=65536:65536 \
+  telemt:local /etc/telemt/telemt.toml
 ```
 
 ---
