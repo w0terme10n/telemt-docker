@@ -1,28 +1,41 @@
 # syntax=docker/dockerfile:1.7
 
-ARG TELEMT_VERSION=3.3.31
+ARG TELEMT_VERSION=
 
 FROM --platform=$TARGETPLATFORM alpine:latest AS fetch
 
 ARG TELEMT_VERSION
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates curl upx \
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --no-cache \
+      ca-certificates \
+      curl \
+      tar \
+      binutils \
+      upx \
     && update-ca-certificates
 
 RUN set -eux; \
     case "${TARGETARCH}" in \
-      amd64)   ARCH=x86_64  ;; \
-      arm64)   ARCH=aarch64 ;; \
+      amd64)  ARCH=x86_64  ;; \
+      arm64)  ARCH=aarch64 ;; \
       *) echo "unsupported arch: ${TARGETARCH}"; exit 1 ;; \
     esac; \
     \
-    BASE_URL="https://github.com/telemt/telemt/releases/download/${TELEMT_VERSION}"; \
+    if [ -n "${TELEMT_VERSION}" ]; then \
+      VERSION="${TELEMT_VERSION}"; \
+    else \
+      VERSION="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/telemt/telemt/releases/latest | sed 's#.*/##')"; \
+    fi; \
+    \
+    BASE_URL="https://github.com/telemt/telemt/releases/download/${VERSION}"; \
     TARBALL="telemt-${ARCH}-linux-musl.tar.gz"; \
     \
+    echo "=== Using release ${VERSION} ==="; \
     echo "=== Downloading ${TARBALL} ==="; \
-    curl -fsSL -o "/tmp/${TARBALL}"        "${BASE_URL}/${TARBALL}"; \
-    curl -fsSL -o "/tmp/${TARBALL}.sha256"  "${BASE_URL}/${TARBALL}.sha256"; \
+    curl -fsSL -o "/tmp/${TARBALL}" "${BASE_URL}/${TARBALL}"; \
+    curl -fsSL -o "/tmp/${TARBALL}.sha256" "${BASE_URL}/${TARBALL}.sha256"; \
     \
     echo "=== Verifying checksum ==="; \
     cd /tmp && sha256sum -c "${TARBALL}.sha256"; \
@@ -40,9 +53,13 @@ RUN set -eux; \
 
 RUN set -eux; \
     echo "=== Before UPX ===" && ls -lh /out/telemt; \
-    upx --ultra-brute --preserve-build-id /out/telemt; \
-    echo "=== After UPX ===" && ls -lh /out/telemt; \
-    echo "=== Integrity check ===" && upx -t /out/telemt
+    if upx --ultra-brute --preserve-build-id /out/telemt; then \
+      echo "=== After UPX ===" && ls -lh /out/telemt; \
+      echo "=== Integrity check ===" && upx -t /out/telemt; \
+    else \
+      echo "=== UPX failed on ${TARGETARCH}, skipping compression ==="; \
+      ls -lh /out/telemt; \
+    fi
 
 FROM gcr.io/distroless/static:nonroot AS runtime
 
