@@ -7,6 +7,12 @@ FROM --platform=$TARGETPLATFORM alpine:latest AS fetch
 ARG TELEMT_VERSION
 ARG TARGETARCH
 
+# ── Cache-buster: передайте при сборке, например:
+#    docker build --build-arg CACHEBUST="$(date +%s)" ...
+# Если TELEMT_VERSION задан явно, кеш-бастер не нужен,
+# но и не помешает — слой и так инвалидируется при смене версии.
+ARG CACHEBUST=
+
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --no-cache \
       ca-certificates \
@@ -16,7 +22,11 @@ RUN --mount=type=cache,target=/var/cache/apk \
       upx \
     && update-ca-certificates
 
+# ↓↓↓  Используем CACHEBUST внутри RUN, чтобы Docker не мог
+#       считать слой неизменным при пустом TELEMT_VERSION
 RUN set -eux; \
+    echo "cache-bust: ${CACHEBUST}"; \
+    \
     case "${TARGETARCH}" in \
       amd64)  ARCH=x86_64  ;; \
       arm64)  ARCH=aarch64 ;; \
@@ -26,7 +36,8 @@ RUN set -eux; \
     if [ -n "${TELEMT_VERSION}" ]; then \
       VERSION="${TELEMT_VERSION}"; \
     else \
-      VERSION="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/telemt/telemt/releases/latest | sed 's#.*/##')"; \
+      VERSION="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        https://github.com/telemt/telemt/releases/latest | sed 's#.*/##')"; \
     fi; \
     \
     BASE_URL="https://github.com/telemt/telemt/releases/download/${VERSION}"; \
