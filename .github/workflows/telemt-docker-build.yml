@@ -23,15 +23,13 @@ concurrency:
 
 permissions:
   contents: write
+  packages: write
 
 env:
-  IMAGE_NAME: whn0thacked/telemt-docker
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
   UPSTREAM_OWNER: telemt
   UPSTREAM_REPO: telemt
-
-  RUST_IMAGE: docker.io/library/rust:alpine
-  DISTROLESS_IMAGE: gcr.io/distroless/static:nonroot
 
   STATE_FILE: .github/telemt-docker/state.json
 
@@ -45,11 +43,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Login to Docker Hub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -190,8 +189,7 @@ jobs:
             ${{ env.IMAGE_NAME }}:telemt-${{ steps.check.outputs.short_sha }}
 
           build-args: |
-            TELEMT_REPO=https://github.com/${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}.git
-            TELEMT_REF=${{ steps.check.outputs.release_tag }}
+            TELEMT_VERSION=${{ steps.check.outputs.release_tag }}
 
           cache-from: type=gha
           cache-to: type=gha,mode=max

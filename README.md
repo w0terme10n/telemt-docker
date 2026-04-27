@@ -1,17 +1,11 @@
 # 🐳 telemt-docker
 
-> **📢 Сборка образов перенесена в GitLab**
->
-> Из-за перманентной блокировки GitHub Actions образы теперь собираются в
-> **[GitLab CI](https://gitlab.com/An0nX/telemt-docker)**. GitHub-репозиторий
-> продолжает существовать как зеркало GitLab.
->
-> Подробности: [An0nX/telemt-docker#14](https://github.com/An0nX/telemt-docker/issues/14)
+> Community-maintained fork that tracks upstream Telemt releases and publishes
+> Docker images to GitHub Container Registry.
 
 ---
 
-[![Docker Image Size](https://img.shields.io/docker/image-size/whn0thacked/telemt-docker/latest?style=flat-square&logo=docker&color=blue)](https://hub.docker.com/r/whn0thacked/telemt-docker)
-[![Docker Pulls](https://img.shields.io/docker/pulls/whn0thacked/telemt-docker?style=flat-square&logo=docker)](https://hub.docker.com/r/whn0thacked/telemt-docker)
+[![Container Registry](https://img.shields.io/badge/registry-GHCR-blue?style=flat-square&logo=github)](https://github.com/w0terme10n/telemt-docker/pkgs/container/telemt-docker)
 [![Architecture](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-important?style=flat-square)](#)
 [![Security: non-root](https://img.shields.io/badge/security-non--root-success?style=flat-square)](#)
 [![Base Image](https://img.shields.io/badge/base-distroless%2Fstatic%3Anonroot-blue?style=flat-square)](https://github.com/GoogleContainerTools/distroless)
@@ -30,7 +24,7 @@ Built as a **fully static** binary and shipped in a **distroless** runtime image
 - **📦 Fully static binary:** Designed for `gcr.io/distroless/static:nonroot`.
 - **🧾 Config-driven:** You mount a single configuration file directory and go.
 - **📈 Metrics-ready:** Supports Telemt metrics port (`9090`) via config.
-- **🧰 Build-time pinning:** Upstream repo/ref are configurable via build args.
+- **🧰 Build-time pinning:** Upstream Telemt release is configurable via `TELEMT_VERSION`.
 
 ---
 
@@ -89,7 +83,7 @@ chmod 666 ./telemt-config/telemt.toml
 ```yaml
 services:
   telemt:
-    image: whn0thacked/telemt-docker:latest
+    image: ghcr.io/w0terme10n/telemt-docker:latest
     container_name: telemt
     restart: unless-stopped
 
@@ -215,7 +209,7 @@ docker compose logs -f
 ## 🧠 Container Behavior
 
 - **ENTRYPOINT:** `telemt`
-- **CMD:** Extracted from the `docker-compose.yml` (`["/etc/telemt/telemt.toml"]`)
+- **CMD:** `["/etc/telemt.toml"]` by default; the Compose example overrides it with `["/etc/telemt/telemt.toml"]`.
 
 So the container effectively runs:
 
@@ -241,26 +235,25 @@ docker run --name telemt --restart unless-stopped \
 
 ## 🛠 Build
 
-This Dockerfile supports pinning upstream Telemt source:
+This Dockerfile downloads release archives from upstream Telemt and supports pinning a specific release tag:
 
-- `TELEMT_REPO` (default: `https://github.com/telemt/telemt.git`)
-- `TELEMT_REF` (default: `main`)
+- `TELEMT_VERSION` (default: latest upstream release)
 
 ### Multi-arch build (amd64 + arm64)
 
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t whn0thacked/telemt-docker:latest \
+  -t ghcr.io/w0terme10n/telemt-docker:latest \
   --push .
 ```
 
-### Build a specific upstream tag/branch/commit
+### Build a specific upstream release
 
 ```bash
 docker buildx build \
-  --build-arg TELEMT_REF=v1.1.0.0 \
-  -t whn0thacked/telemt-docker:v1.1.0.0 \
+  --build-arg TELEMT_VERSION=3.4.8 \
+  -t ghcr.io/w0terme10n/telemt-docker:3.4.8 \
   --push .
 ```
 
@@ -269,5 +262,6 @@ docker buildx build \
 ## 🔗 Useful Links
 
 - **Telemt upstream:** https://github.com/telemt/telemt
+- **Container image:** https://github.com/w0terme10n/telemt-docker/pkgs/container/telemt-docker
 - **MTProxy ad tag bot:** https://t.me/mtproxybot
 - **Distroless images:** https://github.com/GoogleContainerTools/distroless
